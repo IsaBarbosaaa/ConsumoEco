@@ -120,7 +120,3 @@ Crie um repositório vazio no GitHub antes de executar os comandos. Substitua `S
 ## Limites do MVP
 
 Sem integração com concessionárias, sem IoT, sem cobrança, sem inteligência artificial e sem dados reais pré-carregados. A calculadora usa estimativas proporcionais; a conta real pode diferir conforme tarifa e impostos.
-
-## Licença
-
-MIT (veja `LICENSE`).
