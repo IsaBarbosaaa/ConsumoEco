@@ -1,6 +1,6 @@
 # ConsumoEco
 
-Plataforma de consumo consciente para a comunidade do Condomínio Vila Alpina. MVP acadêmico com cadastro e autenticação, registro mensal de água/energia, painel de gráficos, calculadora de economia e dicas sustentáveis.
+Plataforma de consumo consciente. MVP acadêmico com cadastro e autenticação, registro mensal de água/energia, painel de gráficos, calculadora de economia e dicas sustentáveis.
 
 ## Como abrir uma prévia imediatamente (sem instalar nada)
 
