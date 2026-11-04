@@ -1,0 +1,38 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-consumoeco}
+      POSTGRES_USER: ${POSTGRES_USER:-consumoeco}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-consumoeco_local}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-consumoeco} -d ${POSTGRES_DB:-consumoeco}"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-consumoeco}
+      DATABASE_USER: ${POSTGRES_USER:-consumoeco}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-consumoeco_local}
+      COOKIE_SECURE: 'false'
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "java -version >/dev/null 2>&1"]
+      interval: 30s
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8088}:80"
+    depends_on:
+      - backend
+volumes:
+  postgres_data:
