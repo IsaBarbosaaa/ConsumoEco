@@ -12,18 +12,20 @@ const percent=(current,old)=>old>0?((current-old)/old)*100:null;
 function App(){
  const [demo,setDemo]=useState(false),[user,setUser]=useState(null),[page,setPage]=useState('login'),[records,setRecords]=useState([]);
  const [contents,setContents]=useState([]),[busy,setBusy]=useState(true),[toast,setToast]=useState(null),[mobile,setMobile]=useState(false);
+ const [saveNotice,setSaveNotice]=useState(null);
  const [form,setForm]=useState({month:new Date().toISOString().slice(0,7),waterM3:'',waterCost:'',energyKwh:'',energyCost:''});
  const [editId,setEditId]=useState(null);
  const alert=(message,type='success')=>{setToast({message,type});window.setTimeout(()=>setToast(null),4800)};
  useEffect(()=>{(async()=>{try{await refreshCsrf();const me=await api('/auth/me');setUser(me);setPage('register-consumption');await loadRecords();}catch{}finally{setBusy(false)}})()},[]);
  const loadRecords=async()=>{try{setRecords(await api('/consumptions'))}catch(e){console.warn(e)}};
- const go=v=>{setPage(v);setMobile(false);window.scrollTo(0,0)};
+ const go=v=>{setPage(v);setMobile(false);if(v!=='results')setSaveNotice(null);window.scrollTo(0,0)};
  const enterDemo=()=>{setDemo(true);setUser({name:'Morador Exemplo',email:'morador.exemplo@consumoeco.test'});setRecords(demoRecords());go('register-consumption');alert('Modo demonstração: os dados ficam apenas nesta página')};
  const exit=async()=>{if(!demo){try{await api('/auth/logout',{method:'POST'})}catch{}}setUser(null);setDemo(false);setRecords([]);go('login');try{await refreshCsrf()}catch{}};
  const save=async payload=>{try{
   let result;if(demo){result={...payload,id:editId||Date.now()};setRecords(old=>[...old.filter(x=>x.id!==editId),result].sort((a,b)=>a.month.localeCompare(b.month)))}
   else {result=await api(`/consumptions${editId?'/'+editId:''}`,{method:editId?'PUT':'POST',body:payload});await loadRecords()}
-  setEditId(null);setForm({month:new Date().toISOString().slice(0,7),waterM3:'',waterCost:'',energyKwh:'',energyCost:''});alert('Registro salvo com sucesso!');go('results');
+  setEditId(null);setForm({month:new Date().toISOString().slice(0,7),waterM3:'',waterCost:'',energyKwh:'',energyCost:''});
+  setSaveNotice(`Registro de ${monthFull(payload.month)} salvo com sucesso. Os indicadores e gráficos foram atualizados.`);alert('Registro salvo com sucesso!');go('results');
  }catch(e){alert(e.message,'error')}};
  const deleteRecord=async id=>{if(!window.confirm('Excluir este registro de consumo?'))return;try{if(demo)setRecords(old=>old.filter(x=>x.id!==id));else{await api('/consumptions/'+id,{method:'DELETE'});await loadRecords()}alert('Registro excluído')}catch(e){alert(e.message,'error')}};
  const editRecord=x=>{setForm({month:x.month.slice(0,7),waterM3:String(x.waterM3),waterCost:String(x.waterCost),energyKwh:String(x.energyKwh),energyCost:String(x.energyCost)});setEditId(x.id);go('register-consumption')};
@@ -38,7 +40,7 @@ function App(){
   <main className="workspace"><header className="topbar"><button className="icon-button menu-mobile" onClick={()=>setMobile(true)} aria-label="Abrir menu"><Menu/></button><div className="top-logo"><Leaf size={23}/> ConsumoEco</div><div className="account"><span className="avatar"><UserRound size={22}/></span><span>{user.name}</span>{demo&&<span className="demo-label">Demo</span>}</div></header>
   <div className="workspace-content">
   {page==='register-consumption'&&<Entry form={form} setForm={setForm} editId={editId} onSubmit={save} onCancel={()=>go('results')} />}
-  {page==='results'&&<Results records={records} onNew={()=>{setEditId(null);setForm({month:new Date().toISOString().slice(0,7),waterM3:'',waterCost:'',energyKwh:'',energyCost:''});go('register-consumption')}} onEdit={editRecord} onDelete={deleteRecord} onCalculator={()=>go('calculator')}/>}
+  {page==='results'&&<Results records={records} notice={saveNotice} onDismissNotice={()=>setSaveNotice(null)} onNew={()=>{setEditId(null);setForm({month:new Date().toISOString().slice(0,7),waterM3:'',waterCost:'',energyKwh:'',energyCost:''});go('register-consumption')}} onEdit={editRecord} onDelete={deleteRecord} onCalculator={()=>go('calculator')}/>}
   {page==='calculator'&&<CalculatorPage records={records}/>}
   {page==='tips'&&<Tips contents={contents} setContents={setContents} demo={demo}/>}
   </div></main>{toast&&<div role="status" className={'toast '+toast.type}>{toast.type==='success'?<CheckCircle2/>:<AlertCircle/>}{toast.message}</div>}
@@ -73,7 +75,7 @@ function Entry({form,setForm,onSubmit,onCancel,editId}){
  </form></>;
 }
 function Kpi({type,title,value,change,detail}){const positive=change!==null&&change<=0;return <div className={'kpi '+type}><div className="kpi-top"><span className="round-icon small">{type==='water'?<Droplets/>:type==='energy'?<Zap/>:<ChartNoAxesCombined/>}</span><div><strong>{title}</strong><div className="kpi-value">{value}</div></div></div><div className={'kpi-change '+(positive?'good':change===null?'neutral':'bad')}>{change===null?'Sem comparação':<>{positive?<TrendingDown size={19}/>:<TrendingUp size={19}/>} {n(Math.abs(change))}%</>}{change!==null&&<small> em relação ao mês anterior</small>}</div></div>}
-function Results({records,onNew,onEdit,onDelete,onCalculator}){
+function Results({records,notice,onDismissNotice,onNew,onEdit,onDelete,onCalculator}){
  const sorted=[...records].sort((a,b)=>a.month.localeCompare(b.month));
  const[cur,previous]=[sorted.at(-1),sorted.at(-2)];
  const [filter,setFilter]=useState('6');
@@ -81,6 +83,8 @@ function Results({records,onNew,onEdit,onDelete,onCalculator}){
  const chart=selected.map(r=>({name:monthLabel(r.month),water:Number(r.waterM3),energy:Number(r.energyKwh)}));
  const changes=cur&&previous?{w:percent(cur.waterM3,previous.waterM3),e:percent(cur.energyKwh,previous.energyKwh),t:percent(Number(cur.waterCost)+Number(cur.energyCost),Number(previous.waterCost)+Number(previous.energyCost))}:{w:null,e:null,t:null};
  return <><div className="page-heading"><div><h1>Resultados do consumo</h1><p>Acompanhe a evolução, compare períodos e identifique oportunidades de economia.</p></div></div>
+ {notice&&<div className="save-confirmation" role="status" aria-live="polite"><CheckCircle2/><div><strong>Registro confirmado</strong><p>{notice}</p></div><button type="button" onClick={onDismissNotice} aria-label="Fechar confirmação"><X/></button></div>}
+ <div className="accessibility-note" role="note"><ShieldCheck/><div><strong>Navegação acessível</strong><p>Use a tecla Tab para percorrer os controles. O contorno dourado mostra qual item está selecionado pelo teclado.</p></div></div>
  <div className="filter-row"><label>Período <select value={filter} onChange={e=>setFilter(e.target.value)}><option value="6">Últimos 6 meses</option><option value="12">Últimos 12 meses</option><option value="all">Todo o histórico</option></select></label><span>{sorted.length} registro(s) cadastrado(s)</span></div>
  {cur?<><div className="kpi-grid"><Kpi type="water" title="Água" value={`${n(cur.waterM3,2)} m³`} change={changes.w}/><Kpi type="energy" title="Energia" value={`${n(cur.energyKwh,0)} kWh`} change={changes.e}/><Kpi type="total" title="Gasto total" value={money(Number(cur.waterCost)+Number(cur.energyCost))} change={changes.t}/></div>
  <div className="charts-grid"><ChartCard title="Evolução do consumo de água" data={chart} dataKey="water" unit="m³" stroke="#168ccc"/><ChartCard title="Evolução do consumo de energia" data={chart} dataKey="energy" unit="kWh" stroke="#f6a11e"/></div>
@@ -90,7 +94,7 @@ function Results({records,onNew,onEdit,onDelete,onCalculator}){
  <div className="results-actions"><button className="outline-btn" onClick={onNew}><Plus size={20}/> Novo registro</button><button className="primary-btn" onClick={onCalculator}><Calculator size={20}/> Abrir calculadora</button></div>
  </>
 }
-function ChartCard({title,data,dataKey,unit,stroke}){return <div className="surface chart-card"><h2>{title}</h2><div className="chart"><ResponsiveContainer width="100%" height="100%"><LineChart data={data} margin={{top:12,right:20,left:0,bottom:10}}><CartesianGrid stroke="#e8eeea" strokeDasharray="4 4"/><XAxis dataKey="name" tick={{fontSize:12,fill:'#62716e'}}/><YAxis width={40} tick={{fontSize:12,fill:'#62716e'}}/><Tooltip formatter={v=>[`${n(v,1)} ${unit}`,title]}/><Line type="monotone" dataKey={dataKey} name={unit} stroke={stroke} strokeWidth={3} dot={{r:4,fill:'#fff',strokeWidth:2}}/></LineChart></ResponsiveContainer></div><p className="chart-access">Valores: {data.map(r=>`${r.name} ${n(r[dataKey],1)} ${unit}`).join(' · ')||'Nenhum registro'}</p></div>}
+function ChartCard({title,data,dataKey,unit,stroke}){return <div className="surface chart-card"><h2>{title}</h2><p className="chart-help">Como interpretar: a linha mostra a variação mensal; movimentos descendentes indicam redução do consumo.</p><div className="chart"><ResponsiveContainer width="100%" height="100%"><LineChart data={data} margin={{top:12,right:20,left:0,bottom:10}}><CartesianGrid stroke="#e8eeea" strokeDasharray="4 4"/><XAxis dataKey="name" tick={{fontSize:12,fill:'#62716e'}}/><YAxis width={40} tick={{fontSize:12,fill:'#62716e'}}/><Tooltip formatter={v=>[`${n(v,1)} ${unit}`,title]}/><Line type="monotone" dataKey={dataKey} name={unit} stroke={stroke} strokeWidth={3} dot={{r:4,fill:'#fff',strokeWidth:2}}/></LineChart></ResponsiveContainer></div><p className="chart-access"><strong>Valores apresentados:</strong> {data.map(r=>`${r.name} ${n(r[dataKey],1)} ${unit}`).join(' · ')||'Nenhum registro'}</p></div>}
 function MiniCalc({record}){const[goal,setGoal]=useState(10),[water,setWater]=useState(false);
  const quantity=water?Number(record.waterM3):Number(record.energyKwh),cost=water?Number(record.waterCost):Number(record.energyCost);
  return <div className="surface mini-calc"><div className="section-heading"><span className="section-icon"><Calculator/></span><div><h2>Calculadora de economia</h2><p>Simule uma redução e veja o resultado estimado.</p></div></div>
