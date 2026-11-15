@@ -1,0 +1,62 @@
+name: Monitoramento de produção
+
+on:
+  workflow_run:
+    workflows: ["Publicar no GitHub Pages"]
+    types: [completed]
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  disponibilidade:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    env:
+      SITE_URL: https://isabarbosaaa.github.io/ConsumoEco/
+
+    steps:
+      - name: Verificar página publicada
+        shell: bash
+        run: |
+          mkdir -p monitoring
+          checked_at=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          metrics=$(curl --location --silent --show-error \
+            --retry 3 --retry-delay 5 --retry-all-errors \
+            --output monitoring/site.html \
+            --write-out '%{http_code} %{time_total} %{size_download}' \
+            "$SITE_URL")
+          read -r http_code response_time size_download <<< "$metrics"
+
+          {
+            echo "ConsumoEco - monitoramento de produção"
+            echo "Data UTC: $checked_at"
+            echo "URL: $SITE_URL"
+            echo "HTTP: $http_code"
+            echo "Tempo de resposta: ${response_time}s"
+            echo "Tamanho recebido: ${size_download} bytes"
+          } | tee monitoring/report.txt
+
+          {
+            echo "## Monitoramento de produção"
+            echo "- **URL:** $SITE_URL"
+            echo "- **HTTP:** $http_code"
+            echo "- **Tempo de resposta:** ${response_time}s"
+            echo "- **Tamanho recebido:** ${size_download} bytes"
+            echo "- **Verificado em:** $checked_at"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          [[ "$http_code" =~ ^2[0-9][0-9]$ ]]
+          grep -q "ConsumoEco" monitoring/site.html
+
+      - name: Publicar relatório técnico
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: relatorio-monitoramento-producao
+          path: monitoring/report.txt
+          if-no-files-found: warn
+          retention-days: 30
