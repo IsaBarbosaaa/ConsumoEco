@@ -7,6 +7,7 @@ import jakarta.validation.constraints.*;
 import java.util.Map;
 import org.springframework.http.*;
 import org.springframework.security.authentication.*;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.*;
 import org.springframework.security.crypto.password.PasswordEncoder;
